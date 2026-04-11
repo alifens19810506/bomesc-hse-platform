@@ -1,0 +1,58 @@
+[
+  {
+    "id": 1,
+    "name": "法规标准",
+    "icon": "scale",
+    "color": "#3b82f6",
+    "bg": "#eff6ff",
+    "border": "#dbeafe"
+  },
+  {
+    "id": 2,
+    "name": "职业健康",
+    "icon": "heart-pulse",
+    "color": "#10b981",
+    "bg": "#ecfdf5",
+    "border": "#d1fae5"
+  },
+  {
+    "id": 3,
+    "name": "安全生产",
+    "icon": "shield-check",
+    "color": "#f59e0b",
+    "bg": "#fffbeb",
+    "border": "#fef3c7"
+  },
+  {
+    "id": 4,
+    "name": "企业环保",
+    "icon": "leaf",
+    "color": "#14b8a6",
+    "bg": "#f0fdfa",
+    "border": "#ccfbf1"
+  },
+  {
+    "id": 5,
+    "name": "消防管理",
+    "icon": "flame",
+    "color": "#ef4444",
+    "bg": "#fef2f2",
+    "border": "#fee2e2"
+  },
+  {
+    "id": 6,
+    "name": "天津/临港",
+    "icon": "building-2",
+    "color": "#8b5cf6",
+    "bg": "#f5f3ff",
+    "border": "#ede9fe"
+  },
+  {
+    "id": 7,
+    "name": "海工行业",
+    "icon": "anchor",
+    "color": "#06b6d4",
+    "bg": "#ecfeff",
+    "border": "#cffafe"
+  }
+]
