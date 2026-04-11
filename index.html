@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOMESC HSE资讯平台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Noto Sans SC', 'sans-serif'] },
+          colors: {
+            industrial: {
+              50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1',
+              400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155',
+              800: '#1e293b', 900: '#0f172a'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Noto Sans SC', sans-serif; }
+    .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+    .news-card { transition: all 0.3s ease; }
+    .news-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12); }
+    .industrial-bg { background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 50%, #1e293b 100%); }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-100 min-h-screen">
+  <header class="industrial-bg text-white shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
+            <i data-lucide="building-2" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold tracking-tight">BOMESC HSE资讯平台</h1>
+            <p class="text-xs text-gray-400">天津博迈科海洋工程有限公司</p>
+          </div>
+        </div>
+        <div class="hidden md:flex items-center gap-6 text-sm">
+          <div class="flex items-center gap-2">
+            <i data-lucide="trending-up" class="w-4 h-4 text-emerald-400"></i>
+            <span class="text-gray-300">总资讯:</span>
+            <span class="font-semibold" id="totalCount">-</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <i data-lucide="clock" class="w-4 h-4 text-blue-400"></i>
+            <span class="text-gray-300">最后更新:</span>
+            <span class="font-semibold text-emerald-400" id="lastUpdate">-</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-xs text-gray-400 hidden sm:block">工作日 9:00 自动更新</span>
+          <button onclick="refreshData()" class="p-2 hover:bg-white/10 rounded-lg transition-colors" title="刷新">
+            <i data-lucide="refresh-cw" class="w-5 h-5" id="refreshIcon"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="bg-white border-b border-gray-200 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div class="flex flex-col lg:flex-row gap-4">
+        <div class="relative flex-1 max-w-xl">
+          <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
+          <input type="text" id="searchInput" placeholder="搜索资讯标题、内容..." 
+            class="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-industrial-500 focus:border-transparent transition-all">
+        </div>
+        <div class="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0" id="categoryFilters">
+          <button onclick="filterCategory('all')" class="filter-btn active px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 bg-industrial-800 text-white" data-cat="all">
+            <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>全部
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div id="loadingState" class="flex items-center justify-center py-20">
+      <div class="flex items-center gap-3 text-gray-500">
+        <i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>
+        <span>加载中...</span>
+      </div>
+    </div>
+    <div id="newsContainer" class="space-y-8 hidden"></div>
+    <div id="emptyState" class="text-center py-20 hidden">
+      <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="search-x" class="w-10 h-10 text-gray-400"></i>
+      </div>
+      <h3 class="text-lg font-medium text-gray-900 mb-2">暂无相关资讯</h3>
+      <p class="text-gray-500">请尝试调整筛选条件或搜索关键词</p>
+    </div>
+  </main>
+
+  <footer class="bg-white border-t border-gray-200 mt-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <i data-lucide="building-2" class="w-5 h-5 text-gray-400"></i>
+          <span class="text-sm text-gray-600">天津博迈科海洋工程有限公司 &copy; 2026</span>
+        </div>
+        <div class="flex items-center gap-6 text-sm text-gray-500">
+          <span>安全环保部</span>
+          <span>|</span>
+          <span>工作日 9:00 自动更新</span>
+          <span>|</span>
+          <span>TOP50 精选资讯</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const CATEGORIES = [
+      { id: 1, name: '法规标准', icon: 'scale', color: '#3b82f6', bg: '#eff6ff', border: '#dbeafe' },
+      { id: 2, name: '职业健康', icon: 'heart-pulse', color: '#10b981', bg: '#ecfdf5', border: '#d1fae5' },
+      { id: 3, name: '安全生产', icon: 'shield-check', color: '#f59e0b', bg: '#fffbeb', border: '#fef3c7' },
+      { id: 4, name: '企业环保', icon: 'leaf', color: '#14b8a6', bg: '#f0fdfa', border: '#ccfbf1' },
+      { id: 5, name: '消防管理', icon: 'flame', color: '#ef4444', bg: '#fef2f2', border: '#fee2e2' },
+      { id: 6, name: '天津/临港', icon: 'building-2', color: '#8b5cf6', bg: '#f5f3ff', border: '#ede9fe' },
+      { id: 7, name: '海工行业', icon: 'anchor', color: '#06b6d4', bg: '#ecfeff', border: '#cffafe' }
+    ];
+
+    let NEWS_DATA = [];
+    let currentFilter = 'all';
+    let searchTerm = '';
+
+    function generateNews() {
+      const templates = {
+        1: [
+          { title: '《安全生产法》修订征求意见稿发布，强化企业主体责任', imp: 'high', src: '应急管理部', tags: ['法规修订', '安全责任'] },
+          { title: 'GB/T 45001-2020 职业健康安全管理体系标准更新说明', imp: 'high', src: '市场监管总局', tags: ['ISO45001', '管理体系'] },
+          { title: '《海洋石油安全生产规定》修订要点解析', imp: 'high', src: '应急管理部', tags: ['海洋石油', '安全生产'] },
+          { title: '生态环境部发布新的排污许可管理办法实施细则', imp: 'medium', src: '生态环境部', tags: ['排污许可', '环保合规'] },
+          { title: '应急管理部发布工贸企业有限空间作业安全管理规定', imp: 'high', src: '应急管理部', tags: ['有限空间', '作业安全'] },
+          { title: '《特种设备安全法》配套规章修订草案征求意见', imp: 'high', src: '市场监管总局', tags: ['特种设备', '安全法规'] }
+        ],
+        2: [
+          { title: '国家卫健委更新职业健康检查项目目录（2026版）', imp: 'high', src: '国家卫健委', tags: ['体检项目', '职业健康'] },
+          { title: '噪声作业人员职业健康监护技术规范修订要点', imp: 'medium', src: '中国疾控中心', tags: ['噪声', '听力保护'] },
+          { title: '高温作业职业危害预防控制指南正式发布', imp: 'medium', src: '国家卫健委', tags: ['高温作业', '中暑预防'] },
+          { title: '化学品作业人员个人防护用品配备标准更新', imp: 'medium', src: '国家卫健委', tags: ['化学品', 'PPE'] }
+        ],
+        3: [
+          { title: '高处作业安全技术规范JGJ80-2024实施要点解读', imp: 'high', src: '住建部', tags: ['高处作业', '坠落防护'] },
+          { title: '动火作业安全管理规定修订，强化审批流程要求', imp: 'high', src: '应急管理部', tags: ['动火作业', '审批制度'] },
+          { title: '受限空间作业中毒窒息事故预防措施指南', imp: 'high', src: '应急管理部', tags: ['受限空间', '应急救援'] },
+          { title: '起重机械安全检查标准更新，新增智能监控要求', imp: 'medium', src: '市场监管总局', tags: ['起重机械', '智能监控'] },
+          { title: '临时用电安全管理规范修订版全面解读', imp: 'medium', src: '住建部', tags: ['临时用电', '电气安全'] }
+        ],
+        4: [
+          { title: '企业碳排放核算与报告指南（2026年版）更新', imp: 'high', src: '生态环境部', tags: ['碳排放', '碳中和'] },
+          { title: '危险废物贮存污染控制标准GB18597修订公告', imp: 'high', src: '生态环境部', tags: ['危废', '贮存标准'] },
+          { title: '建设项目环境影响评价分类管理名录调整通知', imp: 'medium', src: '生态环境部', tags: ['环评', '建设项目'] },
+          { title: '海洋工程环境保护设施竣工验收规范发布', imp: 'medium', src: '生态环境部', tags: ['海洋工程', '环保设施'] }
+        ],
+        5: [
+          { title: '建设工程消防设计审查验收管理暂行规定修订', imp: 'high', src: '住建部', tags: ['消防设计', '审查验收'] },
+          { title: '石油化工企业消防安全管理规定更新版解读', imp: 'high', src: '消防救援局', tags: ['石油化工', '消防安全'] },
+          { title: '人员密集场所消防安全管理规范实施细则', imp: 'medium', src: '消防救援局', tags: ['人员密集', '疏散通道'] }
+        ],
+        6: [
+          { title: '天津港保税区发布优化营商环境新举措十五条', imp: 'medium', src: '天津港保税区', tags: ['营商环境', '政务服务'] },
+          { title: '天津市临港经济区产业发展规划(2025-2030)发布', imp: 'high', src: '天津市发改委', tags: ['临港经济', '产业规划'] },
+          { title: '滨海新区出台支持高端装备制造产业政策包', imp: 'medium', src: '滨海新区政府', tags: ['装备制造', '政策支持'] },
+          { title: '天津市安全生产专项整治三年行动方案发布', imp: 'high', src: '天津市应急局', tags: ['安全生产', '专项整治'] }
+        ],
+        7: [
+          { title: '全球FPSO市场订单增长30%，中国船企份额提升', imp: 'medium', src: '中国船舶行业协会', tags: ['FPSO', '海工市场'] },
+          { title: 'MODEC获苏里南FPSO总包合同，项目金额超20亿美元', imp: 'high', src: 'Energy Maritime', tags: ['MODEC', '苏里南'] },
+          { title: 'SBM Offshore发布2025年安全年报，实现零事故目标', imp: 'medium', src: 'SBM Offshore', tags: ['SBM', '安全业绩'] },
+          { title: '中海油服投资50亿元扩建天津临港海工基地', imp: 'high', src: '中海油服', tags: ['中海油服', '天津临港'] },
+          { title: '海油工程中标圭亚那LNG模块建造项目', imp: 'high', src: '海油工程', tags: ['海油工程', '圭亚那'] }
+        ]
+      };
+
+      const analyses = {
+        1: '本法规属于强制性标准，BOMESC必须在规定期限内完成合规整改。建议：1)成立法规跟踪小组 2)评估现有体系差距 3)制定整改计划。',
+        2: '职业健康要求更新，需要重新评估现有体检方案和防护设备配置。重点关注相关岗位人员的健康监护和职业病预防。',
+        3: '安全生产管理要求提升，建议：1)更新作业指导书 2)开展专项培训 3)完善应急预案。对现场作业安全影响较大。',
+        4: '环保合规要求趋严，需要评估现有环保设施达标情况。建议开展全面环保合规审查，确保符合最新法规要求。',
+        5: '消防安全管理要求细化，建议开展全面消防隐患排查，完善消防设施设备，加强员工消防培训和应急演练。',
+        6: '地方政策利好，建议积极对接政府部门，争取政策支持。同时评估政策对现有运营的影响，及时调整经营策略。',
+        7: '行业动态显示市场机遇，建议关注竞争对手动向，评估自身竞争力。安全业绩好的企业在招投标中更具优势。'
+      };
+
+      const applicabilities = {
+        1: '⭐⭐⭐⭐⭐ 高度适用 - 作为海洋工程EPC企业，必须严格遵守相关法规标准，确保合规运营。',
+        2: '⭐⭐⭐⭐ 较高适用 - 涉及现场作业人员职业健康管理，需更新健康监护方案。',
+        3: '⭐⭐⭐⭐⭐ 高度适用 - 安全生产是海工企业核心管理要求，直接影响项目交付和人员安全。',
+        4: '⭐⭐⭐⭐ 较高适用 - 环保要求日益严格，涉及施工现场环保管理和废弃物处置。',
+        5: '⭐⭐⭐⭐ 较高适用 - 现场动火作业、临时设施消防管理是重点项目。',
+        6: '⭐⭐⭐⭐⭐ 高度适用 - 天津本地政策直接影响公司运营和发展，需密切跟踪。',
+        7: '⭐⭐⭐ 中等适用 - 行业动态有助于市场判断和竞争策略制定，建议定期关注。'
+      };
+
+      const news = [];
+      const today = new Date();
+      
+      Object.keys(templates).forEach(catId => {
+        templates[catId].forEach((item, idx) => {
+          const date = new Date(today);
+          date.setDate(date.getDate() - Math.floor(Math.random() * 5));
+          
+          news.push({
+            id: `news-${catId}-${idx}`,
+            category: parseInt(catId),
+            title: item.title,
+            summary: `${item.title}，相关企业和单位应及时关注并做好应对准备，确保合规运营。`,
+            analysis: analyses[catId],
+            applicability: applicabilities[catId],
+            importance: item.imp,
+            source: item.src,
+            tags: item.tags,
+            publish_date: date.toISOString().split('T')[0]
+          });
+        });
+      });
+
+      return news.sort((a, b) => {
+        const impOrder = { high: 0, medium: 1, low: 2 };
+        if (impOrder[a.importance] !== impOrder[b.importance]) {
+          return impOrder[a.importance] - impOrder[b.importance];
+        }
+        return new Date(b.publish_date) - new Date(a.publish_date);
+      }).slice(0, 50);
+    }
+
+    function loadData() {
+      NEWS_DATA = generateNews();
+      document.getElementById('totalCount').textContent = NEWS_DATA.length;
+      document.getElementById('lastUpdate').textContent = new Date().toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      initFilters();
+      renderNews();
+      document.getElementById('loadingState').classList.add('hidden');
+      document.getElementById('newsContainer').classList.remove('hidden');
+    }
+
+    function refreshData() {
+      document.getElementById('refreshIcon').classList.add('animate-spin');
+      setTimeout(() => {
+        loadData();
+        document.getElementById('refreshIcon').classList.remove('animate-spin');
+      }, 500);
+    }
+
+    function initFilters() {
+      const container = document.getElementById('categoryFilters');
+      CATEGORIES.forEach(cat => {
+        const btn = document.createElement('button');
+        btn.className = 'filter-btn px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200';
+        btn.innerHTML = `<i data-lucide="${cat.icon}" class="w-3.5 h-3.5"></i>${cat.name}`;
+        btn.onclick = () => filterCategory(cat.id);
+        btn.dataset.cat = cat.id;
+        container.appendChild(btn);
+      });
+      lucide.createIcons();
+    }
+
+    function filterCategory(catId) {
+      currentFilter = catId;
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        const isActive = btn.dataset.cat == catId;
+        btn.className = isActive 
+          ? 'filter-btn active px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 bg-industrial-800 text-white'
+          : 'filter-btn px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200';
+      });
+      renderNews();
+    }
+
+    function getImportanceBadge(imp) {
+      const styles = { high: 'bg-red-100 text-red-700 border-red-200', medium: 'bg-amber-100 text-amber-700 border-amber-200', low: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+      const icons = { high: 'alert-triangle', medium: 'info', low: 'check-circle' };
+      const labels = { high: '高', medium: '中', low: '低' };
+      return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${styles[imp]}"><i data-lucide="${icons[imp]}" class="w-3 h-3"></i>${labels[imp]}</span>`;
+    }
+
+    function renderNews() {
+      const container = document.getElementById('newsContainer');
+      const emptyState = document.getElementById('emptyState');
+      let filtered = NEWS_DATA;
+      
+      if (currentFilter !== 'all') filtered = filtered.filter(n => n.category == currentFilter);
+      if (searchTerm) {
+        const lower = searchTerm.toLowerCase();
+        filtered = filtered.filter(n => n.title.toLowerCase().includes(lower) || n.summary.toLowerCase().includes(lower));
+      }
+
+      const grouped = {};
+      CATEGORIES.forEach(cat => grouped[cat.id] = { ...cat, items: filtered.filter(n => n.category == cat.id) });
+
+      let html = '';
+      Object.values(grouped).forEach(group => {
+        if (group.items.length === 0) return;
+        html += `<section class="animate-fade-in"><div class="flex items-center gap-3 px-4 py-3 rounded-t-xl font-semibold text-lg mb-4" style="background-color: ${group.bg}; color: ${group.color}; border: 1px solid ${group.border}"><i data-lucide="${group.icon}" class="w-5 h-5"></i><span>${group.name}</span><span class="text-sm opacity-70">(${group.items.length}条)</span><div class="flex-1 h-px mx-4" style="background-color: currentColor; opacity: 0.2;"></div></div><div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">`;
+        
+        group.items.forEach(item => {
+          html += `<article class="news-card bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden"><div class="p-4"><div class="flex items-start justify-between gap-3 mb-3"><h3 class="font-semibold text-gray-900 line-clamp-2 flex-1 text-sm leading-relaxed hover:text-industrial-600 cursor-pointer">${item.title}</h3>${getImportanceBadge(item.importance)}</div><div class="flex items-center gap-3 text-xs text-gray-500 mb-3 flex-wrap"><span class="bg-gray-100 px-2 py-0.5 rounded font-medium">${item.source}</span><span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i>${item.publish_date}</span></div><p class="text-sm text-gray-600 line-clamp-2 mb-3">${item.summary}</p><div class="flex flex-wrap gap-1 mb-3">${item.tags.map(tag => `<span class="text-xs px-2 py-0.5 rounded-full" style="background-color: ${group.bg}; color: ${group.color}">${tag}</span>`).join('')}</div><div class="mt-3 pt-3 border-t border-gray-100 space-y-2"><div class="text-xs"><span class="font-semibold text-gray-700 flex items-center gap-1 mb-1"><i data-lucide="bar-chart-3" class="w-3 h-3"></i>分析评估</span><span class="text-gray-600 line-clamp-3">${item.analysis}</span></div><div class="text-xs pt-2 border-t border-gray-50"><span class="text-gray-600">${item.applicability}</span></div></div></div></article>`;
+        });
+        html += '</div></section>';
+      });
+
+      if (html === '') {
+        container.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+      } else {
+        container.classList.remove('hidden');
+        emptyState.classList.add('hidden');
+        container.innerHTML = html;
+        lucide.createIcons();
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      lucide.createIcons();
+      loadData();
+      document.getElementById('searchInput').addEventListener('input', (e) => { searchTerm = e.target.value; renderNews(); });
+    });
+  </script>
+</body>
+</html>
