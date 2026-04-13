@@ -15,6 +15,46 @@ const CATEGORIES = [
   { id: 7, name: '海工行业', icon: 'anchor', color: '#06b6d4', bg: '#ecfeff', border: '#cffafe' }
 ];
 
+// 去重函数：基于标题相似度去重
+function removeDuplicates(newsList) {
+  const seen = new Set();
+  const unique = [];
+  
+  for (const item of newsList) {
+    // 使用标题前30个字符作为去重键
+    const key = item.title.substring(0, 30).toLowerCase().replace(/\s+/g, '');
+    
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(item);
+    }
+  }
+  
+  console.log(`🧹 去重完成: ${newsList.length}条 → ${unique.length}条 (去除了${newsList.length - unique.length}条重复)`);
+  return unique;
+}
+
+// 合并新旧数据并去重
+function mergeAndDeduplicate(existingNews, newNews) {
+  // 合并所有数据
+  const combined = [...existingNews, ...newNews];
+  
+  // 按日期排序（新的在前）
+  combined.sort((a, b) => {
+    const impOrder = { high: 0, medium: 1, low: 2 };
+    if (impOrder[a.importance] !== impOrder[b.importance]) {
+      return impOrder[a.importance] - impOrder[b.importance];
+    }
+    return new Date(b.publish_date) - new Date(a.publish_date);
+  });
+  
+  // 去重
+  const deduplicated = removeDuplicates(combined);
+  
+  // 只保留最新的50条
+  return deduplicated.slice(0, 50);
+}
+
 function generateNews() {
   const templates = {
     1: [
@@ -86,11 +126,44 @@ function generateNews() {
     });
   });
 
-  return news.sort((a, b) => {
-    const impOrder = { high: 0, medium: 1, low: 2 };
-    if (impOrder[a.importance] !== impOrder[b.importance]) return impOrder[a.importance] - impOrder[b.importance];
-    return new Date(b.publish_date) - new Date(a.publish_date);
-  }).slice(0, 50);
+  return news;
+}
+
+// 从GitHub获取现有数据
+async function getExistingData() {
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'api.github.com',
+      port: 443,
+      path: `/repos/${OWNER}/${REPO}/contents/data/news.json`,
+      method: 'GET',
+      headers: {
+        'Authorization': `token ${TOKEN}`,
+        'User-Agent': 'BOMESC-Crawler'
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.content) {
+            const content = Buffer.from(json.content, 'base64').toString('utf8');
+            resolve(JSON.parse(content));
+          } else {
+            resolve([]);
+          }
+        } catch {
+          resolve([]);
+        }
+      });
+    });
+
+    req.on('error', () => resolve([]));
+    req.end();
+  });
 }
 
 async function updateGitHubFile(path, content, message) {
@@ -135,17 +208,36 @@ async function updateGitHubFile(path, content, message) {
 }
 
 async function run() {
-  console.log('🚀 爬虫开始运行...');
+  console.log('🚀 爬虫开始运行...\n');
   
-  const news = generateNews();
+  // 1. 获取现有数据
+  console.log('📥 读取现有数据...');
+  const existingNews = await getExistingData();
+  console.log(`✅ 现有数据: ${existingNews.length}条\n`);
+  
+  // 2. 生成新数据
+  console.log('📝 生成新数据...');
+  const newNews = generateNews();
+  console.log(`✅ 新数据: ${newNews.length}条\n`);
+  
+  // 3. 合并并去重
+  console.log('🧹 合并并去重...');
+  const finalNews = mergeAndDeduplicate(existingNews, newNews);
+  
   const meta = {
     lastUpdate: new Date().toISOString(),
-    totalCount: news.length,
+    totalCount: finalNews.length,
+    duplicatesRemoved: existingNews.length + newNews.length - finalNews.length,
     updateBy: 'GitHub Actions'
   };
 
+  console.log(`\n📊 最终结果:`);
+  console.log(`   - 总资讯数: ${finalNews.length}条`);
+  console.log(`   - 去重数量: ${meta.duplicatesRemoved}条`);
+  console.log(`   - 更新时间: ${new Date().toLocaleString()}\n`);
+
   try {
-    await updateGitHubFile('data/news.json', JSON.stringify(news, null, 2), `Update news ${new Date().toLocaleDateString()}`);
+    await updateGitHubFile('data/news.json', JSON.stringify(finalNews, null, 2), `Update news ${new Date().toLocaleDateString()} [去重${meta.duplicatesRemoved}条]`);
     await updateGitHubFile('data/categories.json', JSON.stringify(CATEGORIES, null, 2), 'Update categories');
     await updateGitHubFile('data/meta.json', JSON.stringify(meta, null, 2), `Update meta ${new Date().toLocaleDateString()}`);
     console.log('✅ 数据更新完成！');
