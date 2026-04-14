@@ -15,46 +15,6 @@ const CATEGORIES = [
   { id: 7, name: '海工行业', icon: 'anchor', color: '#06b6d4', bg: '#ecfeff', border: '#cffafe' }
 ];
 
-// 去重函数：基于标题相似度去重
-function removeDuplicates(newsList) {
-  const seen = new Set();
-  const unique = [];
-  
-  for (const item of newsList) {
-    // 使用标题前30个字符作为去重键
-    const key = item.title.substring(0, 30).toLowerCase().replace(/\s+/g, '');
-    
-    if (!seen.has(key)) {
-      seen.add(key);
-      unique.push(item);
-    }
-  }
-  
-  console.log(`🧹 去重完成: ${newsList.length}条 → ${unique.length}条 (去除了${newsList.length - unique.length}条重复)`);
-  return unique;
-}
-
-// 合并新旧数据并去重
-function mergeAndDeduplicate(existingNews, newNews) {
-  // 合并所有数据
-  const combined = [...existingNews, ...newNews];
-  
-  // 按日期排序（新的在前）
-  combined.sort((a, b) => {
-    const impOrder = { high: 0, medium: 1, low: 2 };
-    if (impOrder[a.importance] !== impOrder[b.importance]) {
-      return impOrder[a.importance] - impOrder[b.importance];
-    }
-    return new Date(b.publish_date) - new Date(a.publish_date);
-  });
-  
-  // 去重
-  const deduplicated = removeDuplicates(combined);
-  
-  // 只保留最新的50条
-  return deduplicated.slice(0, 50);
-}
-
 function generateNews() {
   const templates = {
     1: [
@@ -129,6 +89,37 @@ function generateNews() {
   return news;
 }
 
+// 去重函数：基于标题相似度去重
+function removeDuplicates(newsList) {
+  const seen = new Set();
+  const unique = [];
+  
+  for (const item of newsList) {
+    const key = item.title.substring(0, 30).toLowerCase().replace(/\s+/g, '');
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(item);
+    }
+  }
+  
+  console.log(`🧹 去重完成: ${newsList.length}条 → ${unique.length}条 (去除了${newsList.length - unique.length}条重复)`);
+  return unique;
+}
+
+// 合并新旧数据并去重
+function mergeAndDeduplicate(existingNews, newNews) {
+  const combined = [...existingNews, ...newNews];
+  combined.sort((a, b) => {
+    const impOrder = { high: 0, medium: 1, low: 2 };
+    if (impOrder[a.importance] !== impOrder[b.importance]) {
+      return impOrder[a.importance] - impOrder[b.importance];
+    }
+    return new Date(b.publish_date) - new Date(a.publish_date);
+  });
+  const deduplicated = removeDuplicates(combined);
+  return deduplicated.slice(0, 50);
+}
+
 // 从GitHub获取现有数据
 async function getExistingData() {
   return new Promise((resolve) => {
@@ -166,16 +157,59 @@ async function getExistingData() {
   });
 }
 
-async function updateGitHubFile(path, content, message) {
-  return new Promise((resolve, reject) => {
-    const base64Content = Buffer.from(content).toString('base64');
-    
-    const data = JSON.stringify({
-      message: message,
-      content: base64Content,
-      branch: 'main'
+// 获取文件SHA（用于更新）
+async function getFileSha(path) {
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'api.github.com',
+      port: 443,
+      path: `/repos/${OWNER}/${REPO}/contents/${path}?ref=main`,
+      method: 'GET',
+      headers: {
+        'Authorization': `token ${TOKEN}`,
+        'User-Agent': 'BOMESC-Crawler'
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          resolve(json.sha || null);
+        } catch {
+          resolve(null);
+        }
+      });
     });
 
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}
+
+async function updateGitHubFile(path, content, message) {
+  const base64Content = Buffer.from(content).toString('base64');
+  
+  // 先获取文件SHA（如果是更新现有文件）
+  const sha = await getFileSha(path);
+  console.log(`📝 ${path} ${sha ? '更新' : '创建'} (sha: ${sha ? '存在' : '无'})`);
+  
+  const data = {
+    message: message,
+    content: base64Content,
+    branch: 'main'
+  };
+  
+  // 如果是更新，需要提供sha
+  if (sha) {
+    data.sha = sha;
+  }
+
+  return new Promise((resolve, reject) => {
+    const postData = JSON.stringify(data);
+    
     const options = {
       hostname: 'api.github.com',
       port: 443,
@@ -185,7 +219,7 @@ async function updateGitHubFile(path, content, message) {
         'Authorization': `token ${TOKEN}`,
         'User-Agent': 'BOMESC-Crawler',
         'Content-Type': 'application/json',
-        'Content-Length': data.length
+        'Content-Length': postData.length
       }
     };
 
@@ -194,15 +228,21 @@ async function updateGitHubFile(path, content, message) {
       res.on('data', chunk => responseData += chunk);
       res.on('end', () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
+          console.log(`✅ ${path} 上传成功`);
           resolve(JSON.parse(responseData));
         } else {
+          console.error(`❌ ${path} 失败: HTTP ${res.statusCode}`);
+          console.error('响应:', responseData.substring(0, 500));
           reject(new Error(`HTTP ${res.statusCode}`));
         }
       });
     });
 
-    req.on('error', reject);
-    req.write(data);
+    req.on('error', (e) => {
+      console.error(`❌ ${path} 错误:`, e.message);
+      reject(e);
+    });
+    req.write(postData);
     req.end();
   });
 }
@@ -240,9 +280,9 @@ async function run() {
     await updateGitHubFile('data/news.json', JSON.stringify(finalNews, null, 2), `Update news ${new Date().toLocaleDateString()} [去重${meta.duplicatesRemoved}条]`);
     await updateGitHubFile('data/categories.json', JSON.stringify(CATEGORIES, null, 2), 'Update categories');
     await updateGitHubFile('data/meta.json', JSON.stringify(meta, null, 2), `Update meta ${new Date().toLocaleDateString()}`);
-    console.log('✅ 数据更新完成！');
+    console.log('\n✅ 所有数据更新完成！');
   } catch (error) {
-    console.error('❌ 更新失败:', error.message);
+    console.error('\n❌ 更新失败:', error.message);
     process.exit(1);
   }
 }
