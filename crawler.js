@@ -89,7 +89,7 @@ function generateNews() {
   return news;
 }
 
-// 去重函数：基于标题相似度去重
+// 去重函数
 function removeDuplicates(newsList) {
   const seen = new Set();
   const unique = [];
@@ -106,7 +106,7 @@ function removeDuplicates(newsList) {
   return unique;
 }
 
-// 合并新旧数据并去重
+// 合并新旧数据
 function mergeAndDeduplicate(existingNews, newNews) {
   const combined = [...existingNews, ...newNews];
   combined.sort((a, b) => {
@@ -157,7 +157,7 @@ async function getExistingData() {
   });
 }
 
-// 获取文件SHA（用于更新）
+// 获取文件SHA
 async function getFileSha(path) {
   return new Promise((resolve) => {
     const options = {
@@ -191,8 +191,6 @@ async function getFileSha(path) {
 
 async function updateGitHubFile(path, content, message) {
   const base64Content = Buffer.from(content).toString('base64');
-  
-  // 先获取文件SHA（如果是更新现有文件）
   const sha = await getFileSha(path);
   console.log(`📝 ${path} ${sha ? '更新' : '创建'} (sha: ${sha ? '存在' : '无'})`);
   
@@ -202,7 +200,6 @@ async function updateGitHubFile(path, content, message) {
     branch: 'main'
   };
   
-  // 如果是更新，需要提供sha
   if (sha) {
     data.sha = sha;
   }
@@ -219,7 +216,7 @@ async function updateGitHubFile(path, content, message) {
         'Authorization': `token ${TOKEN}`,
         'User-Agent': 'BOMESC-Crawler',
         'Content-Type': 'application/json',
-        'Content-Length': postData.length
+        'Content-Length': Buffer.byteLength(postData)
       }
     };
 
@@ -250,17 +247,14 @@ async function updateGitHubFile(path, content, message) {
 async function run() {
   console.log('🚀 爬虫开始运行...\n');
   
-  // 1. 获取现有数据
   console.log('📥 读取现有数据...');
   const existingNews = await getExistingData();
   console.log(`✅ 现有数据: ${existingNews.length}条\n`);
   
-  // 2. 生成新数据
   console.log('📝 生成新数据...');
   const newNews = generateNews();
   console.log(`✅ 新数据: ${newNews.length}条\n`);
   
-  // 3. 合并并去重
   console.log('🧹 合并并去重...');
   const finalNews = mergeAndDeduplicate(existingNews, newNews);
   
